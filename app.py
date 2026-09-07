@@ -39,14 +39,14 @@ with col1:
     keywords = st.text_input(
         "Trending Keywords (Line 2)", 
         value="CHAN BETWEEN KEY AND JAY",
-        help="Campaign keywords to search and include."
+        help="Campaign keywords to include."
     )
 
 with col2:
     hashtags = st.text_input(
         "Episode Hashtag (Line 3)", 
         value="#MoonshadowSeriesEP5",
-        help="Campaign hashtag to search and include."
+        help="Campaign hashtag to include."
     )
 
 twist_angle = st.selectbox("Tone / Focus Angle", [
@@ -56,6 +56,18 @@ twist_angle = st.selectbox("Tone / Focus Angle", [
     "Theory, Angst & Plot Suspense",
     "Emotional & Character Dynamic Analysis"
 ])
+
+# --- CRAWL INSPIRATION OPTION ---
+st.markdown("### 🔍 Tweet Inspiration Strategy")
+crawl_option = st.radio(
+    "Choose how the model gathers generative inspiration:",
+    [
+        "Crawl live X/web posts *using* the keyword string as inspiration",
+        "Generate *without* using the keyword string as crawling inspiration (pure creative prompt)"
+    ],
+    index=0,
+    label_visibility="collapsed"
+)
 
 # --- LANGUAGE CHECKBOXES ---
 st.markdown("### 🌐 Select Language(s)")
@@ -134,7 +146,6 @@ max_post_length = max(50, 280 - suffix_length)
 
 st.caption(f"📏 Max text length per post: **{max_post_length} characters** (leaving room for keywords and hashtags within X's 280 limit).")
 
-# Direct link to view real-time live posts on X for inspiration
 if keywords_clean or hashtags_clean:
     search_query = f"{keywords_clean} {hashtags_clean}".strip()
     x_search_url = f"https://x.com/search?q={urllib.parse.quote(search_query)}&f=live"
@@ -157,7 +168,6 @@ if st.button("🔥 Generate Posts", type="primary", disabled=btn_disabled):
     else:
         st.session_state.last_generation_time = current_time
         
-        # Build prompt dynamic instructions based on selected languages
         instructions = []
         total_requested = 0
 
@@ -183,6 +193,12 @@ if st.button("🔥 Generate Posts", type="primary", disabled=btn_disabled):
               Written in natural HK Cantonese (spoken HK Chinese / 廣東話) as used on Threads/X.
             """)
 
+        # Inspiration directive based on crawl option
+        if "using the keyword string" in crawl_option:
+            inspiration_directive = f"Inspiration Mode: Crawl and reference live online discourse and community reactions anchored around the keyword string '{keywords_clean}'."
+        else:
+            inspiration_directive = f"Inspiration Mode: Generate independently without crawling live posts of the keyword string '{keywords_clean}', focusing purely on creative prompt angles."
+
         # Avoid repetitions across generations
         history_context = ""
         if st.session_state.previous_tweets:
@@ -195,9 +211,13 @@ if st.button("🔥 Generate Posts", type="primary", disabled=btn_disabled):
 
         prompt = f"""
         You are a top social media trend strategist and superfan for the TV series 'Moonshadow'.
-        Your task is to generate FRESH, DISTINCT, high-engagement posts for X (Twitter) centered around the campaign:
-        - Keywords: "{keywords_clean}"
-        - Hashtag: "{hashtags_clean}"
+        Your task is to generate FRESH, DISTINCT, high-engagement posts for X (Twitter).
+        
+        MANDATORY REQUIREMENT:
+        - Every generated post MUST be designed to complement and contextually frame the required keyword string: "{keywords_clean}" and hashtag: "{hashtags_clean}".
+        - {inspiration_directive}
+
+        PARAMETERS:
         - Focus Angle: {twist_angle}
         - Max text body length per post: {max_post_length} characters.
 
@@ -208,41 +228,21 @@ if st.button("🔥 Generate Posts", type="primary", disabled=btn_disabled):
         STRICT DIVERSITY RULE:
         {history_context}
         - Every post body must explore a different angle, joke, theory, or reaction.
-        - DO NOT include the campaign keywords or hashtags inside the text body (they will be appended automatically).
+        - DO NOT include the campaign keywords or hashtags inside the text body itself (they will be appended automatically via suffix).
 
         CRITICAL DIRECTIVE:
         Output MUST be strictly a valid JSON array of EXACTLY {total_requested} strings. Do not include markdown code blocks or extra text.
         """
 
-        with st.spinner("Generating fresh posts..."):
-            response = None
-            models_to_try = ["gemini-3.6-flash", "gemini-2.5-flash"]
-            
-            for model_name in models_to_try:
-                try:
-                    model = genai.GenerativeModel(model_name)
-                    response = model.generate_content(prompt)
-                    break
-                except Exception as model_err:
-                    err_str = str(model_err)
-                    if "429" in err_str or "Quota exceeded" in err_str:
-                        st.caption(f"⚠️ `{model_name}` quota reached. Attempting fallback model...")
-                        time.sleep(1)
-                        continue
-                    else:
-                        st.error(f"Error: {err_str}")
-                        st.stop()
-
-            if not response:
-                st.error("Unable to generate posts due to API quota limits. Please try again shortly.")
-                st.stop()
-
+        with st.spinner("Generating fresh posts with Gemini 3.6 Flash..."):
             try:
+                model = genai.GenerativeModel("gemini-3.6-flash")
+                response = model.generate_content(prompt)
+
                 raw_content = response.text.strip()
                 clean_json = re.sub(r'^```json\s*|\s*```$', '', raw_content, flags=re.MULTILINE)
                 captions = json.loads(clean_json)
 
-                # Store generated posts in session history to avoid repetition
                 st.session_state.previous_tweets.extend(captions)
 
                 st.subheader("🎉 Ready-to-Post Captions")
@@ -290,4 +290,4 @@ if st.button("🔥 Generate Posts", type="primary", disabled=btn_disabled):
                             st.write("")
 
             except Exception as e:
-                st.error(f"Error parsing generated output: {str(e)}")
+                st.error(f"Error generating posts: {str(e)}")
