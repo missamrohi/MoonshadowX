@@ -236,7 +236,7 @@ if st.button("🔥 Generate Posts", type="primary", disabled=btn_disabled):
 
         with st.spinner("Generating fresh posts with Gemini 3.6 Flash..."):
             try:
-                model = genai.GenerativeModel("gemini-3.6-flash")
+                model = genai.GenerativeModel("gemini-2.5-flash")
                 response = model.generate_content(prompt)
 
                 raw_content = response.text.strip()
