@@ -10,7 +10,7 @@ import streamlit.components.v1 as components
 st.set_page_config(page_title="Moonshadow X Auto-Generator & Twister", page_icon="🌙", layout="centered")
 
 st.title("🌙 Moonshadow X Auto-Generator")
-st.write("Generate 20 trending posts inspired by current X.com conversations using your campaign keywords and hashtag.")
+st.write("Generate 10 original trending posts inspired by current X.com conversations using your campaign keywords and hashtag.")
 
 # 1. SECURITY: Load API key silently from Streamlit Secrets
 api_key = st.secrets.get("GEMINI_API_KEY", "")
@@ -124,9 +124,9 @@ if keywords_clean or hashtags_clean:
 st.markdown("---")
 
 # --- GENERATION LOGIC ---
-if st.button("🔥 Generate 20 Posts (10 EN + 10 HK CAN)", type="primary"):
+if st.button("🔥 Generate 10 Unique Posts (5 EN + 5 HK CAN)", type="primary"):
     current_time = time.time()
-    cooldown_seconds = 15
+    cooldown_seconds = 10
     
     if current_time - st.session_state.last_generation_time < cooldown_seconds:
         wait_time = int(cooldown_seconds - (current_time - st.session_state.last_generation_time))
@@ -136,30 +136,36 @@ if st.button("🔥 Generate 20 Posts (10 EN + 10 HK CAN)", type="primary"):
     else:
         st.session_state.last_generation_time = current_time
         
-        with st.spinner("Generating 20 trending posts using Gemini 3.6 Flash..."):
+        with st.spinner("Fast-generating 10 distinct posts using Gemini 3.6 Flash..."):
             try:
                 # USING GEMINI-3.6-FLASH
                 model = genai.GenerativeModel("gemini-3.6-flash")
 
                 prompt = f"""
                 You are a top social media trend strategist and superfan for the TV series 'Moonshadow'.
-                Your task is to generate fresh, highly engaging, viral-ready posts for X (Twitter) centered around the trending topic/campaign:
+                Your task is to generate 10 FRESH, DISTINCT, high-engagement posts for X (Twitter) centered around the trending campaign:
                 - Keywords: "{keywords_clean}"
                 - Hashtag: "{hashtags_clean}"
 
                 OUTPUT REQUIREMENT:
-                Generate EXACTLY 20 posts divided into two language sets:
-                - Posts 1-10: Native English (Stan Twitter / X fandom style, natural, casual, lowercase emphasis, zero AI jargon).
-                - Posts 11-20: Hong Kong Style Cantonese (written in colloquial HK Chinese like 睇到喊、癲咗、黐線、張力拉滿、CP感、鎖死, authentic HK internet slang used by HK fans on Threads/X).
+                Generate EXACTLY 10 unique posts split into two completely independent sets:
 
-                STYLE RULES:
-                - Imagine what fans are tweeting on X right now regarding "{keywords_clean}" and "{hashtags_clean}" and write 20 diverse, creative, high-engagement posts.
+                1. POSTS 1-5 (Native English Fandom Style):
+                   - Written in authentic Stan Twitter / X style (casual, lowercase emphasis, natural reactions, zero AI clichés).
+                   - Focus on unique jokes, theories, or reactions popular in international fandoms.
+
+                2. POSTS 6-10 (Hong Kong Cantonese Fandom Style):
+                   - CRITICAL: DO NOT TRANSLATE or rephrase Posts 1-5! These MUST be completely original Cantonese posts written from scratch with totally different angles, jokes, or theories.
+                   - Written in natural, colloquial Hong Kong Cantonese (spoken HK Chinese / 廣東話) as used by local HK fans on Threads/X (e.g., 睇到喊、癲咗、黐線、張力拉滿、CP感、鎖死、呢幕真係、好正).
+                   - Reflect how Hong Kong fans uniquely express hype and emotional reactions.
+
+                GENERAL RULES:
                 - Focus Angle: {twist_angle}.
                 - Maximum text length for EACH post body: MUST NOT exceed {max_post_length} characters.
-                - DO NOT include the campaign keywords or hashtags inside your text body (they will be appended automatically).
+                - DO NOT include the campaign keywords or hashtags inside the post body (they will be appended automatically).
 
                 CRITICAL DIRECTIVE:
-                Output MUST be strictly a valid JSON array of EXACTLY 20 strings. Do not include markdown code blocks or extra text.
+                Output MUST be strictly a valid JSON array of EXACTLY 10 strings. Do not include markdown code blocks or extra text.
                 """
 
                 response = model.generate_content(prompt)
@@ -172,11 +178,11 @@ if st.button("🔥 Generate 20 Posts (10 EN + 10 HK CAN)", type="primary"):
                 st.subheader("🎉 Ready-to-Post Captions")
 
                 # Organize into Tab Views
-                tab_en, tab_hk = st.tabs(["🇬🇧 Native English (10)", "🇭🇰 HK Cantonese (10)"])
+                tab_en, tab_hk = st.tabs(["🇬🇧 Native English (5 Unique)", "🇭🇰 HK Cantonese (5 Unique)"])
 
-                # Render English Posts inside Tab 1
+                # Render English Posts inside Tab 1 (Indices 0..4)
                 with tab_en:
-                    for idx in range(10):
+                    for idx in range(5):
                         if idx < len(captions):
                             caption_text = captions[idx]
                             suffix_parts = [p for p in [keywords_clean, hashtags_clean] if p]
@@ -191,9 +197,9 @@ if st.button("🔥 Generate 20 Posts (10 EN + 10 HK CAN)", type="primary"):
                             render_action_buttons(full_tweet, idx + 1)
                             st.write("")
 
-                # Render Cantonese Posts inside Tab 2
+                # Render Cantonese Posts inside Tab 2 (Indices 5..9)
                 with tab_hk:
-                    for idx in range(10, 20):
+                    for idx in range(5, 10):
                         if idx < len(captions):
                             caption_text = captions[idx]
                             suffix_parts = [p for p in [keywords_clean, hashtags_clean] if p]
