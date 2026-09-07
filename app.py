@@ -12,14 +12,18 @@ st.set_page_config(page_title="Moonshadow X Auto-Generator", page_icon="🌙", l
 st.title("🌙 Moonshadow X Auto-Generator")
 st.write("Generate trending posts inspired by current X.com conversations using your campaign keywords and hashtag.")
 
-# 1. SECURITY: Load API key silently from Streamlit Secrets
+# 1. SECURITY: Load API key safely
 api_key = st.secrets.get("GEMINI_API_KEY", "")
 
 if not api_key:
-    st.error("⚠️ System Configuration Error: Missing API Key in Streamlit Secrets.")
+    st.error("⚠️ System Configuration Error: Missing `GEMINI_API_KEY` in Streamlit Secrets. Please add it to Settings -> Secrets.")
     st.stop()
 
-genai.configure(api_key=api_key.strip())
+try:
+    genai.configure(api_key=api_key.strip())
+except Exception as e:
+    st.error(f"Failed to configure Gemini API: {str(e)}")
+    st.stop()
 
 # 2. SESSION STATE MANAGEMENT
 if "last_generation_time" not in st.session_state:
@@ -154,7 +158,6 @@ if st.button("🔥 Generate Posts", type="primary", disabled=btn_disabled):
         st.session_state.last_generation_time = current_time
         
         # Build prompt dynamic instructions based on selected languages
-        selected_langs = []
         instructions = []
         total_requested = 0
 
@@ -183,7 +186,7 @@ if st.button("🔥 Generate Posts", type="primary", disabled=btn_disabled):
         # Avoid repetitions across generations
         history_context = ""
         if st.session_state.previous_tweets:
-            recent_tweets = st.session_state.previous_tweets[-30:] # Keep last 30
+            recent_tweets = st.session_state.previous_tweets[-30:]
             history_list = "\n".join([f"- {t}" for t in recent_tweets])
             history_context = f"""
             DO NOT REPEAT OR PARAPHRASE ANY OF THESE PREVIOUSLY GENERATED POSTS:
@@ -239,12 +242,11 @@ if st.button("🔥 Generate Posts", type="primary", disabled=btn_disabled):
                 clean_json = re.sub(r'^```json\s*|\s*```$', '', raw_content, flags=re.MULTILINE)
                 captions = json.loads(clean_json)
 
-                # Store generated posts in session history to avoid future repetition
+                # Store generated posts in session history to avoid repetition
                 st.session_state.previous_tweets.extend(captions)
 
                 st.subheader("🎉 Ready-to-Post Captions")
 
-                # Setup Tabs dynamically based on selection
                 tabs_to_create = []
                 if lang_en:
                     tabs_to_create.append("🇬🇧 Native English (10)")
