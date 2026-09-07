@@ -62,8 +62,8 @@ st.markdown("### 🔍 Tweet Inspiration Strategy")
 crawl_option = st.radio(
     "Choose how the model gathers generative inspiration:",
     [
-        "Crawl live X/web posts *using* the keyword string as inspiration",
-        "Generate *without* using the keyword string as crawling inspiration (pure creative prompt)"
+        "Crawl live X/web posts using exact same keyword string + hashtag",
+        "Generate without using the keyword string as crawling inspiration (pure creative prompt)"
     ],
     index=0,
     label_visibility="collapsed"
@@ -194,8 +194,8 @@ if st.button("🔥 Generate Posts", type="primary", disabled=btn_disabled):
             """)
 
         # Inspiration directive based on crawl option
-        if "using the keyword string" in crawl_option:
-            inspiration_directive = f"Inspiration Mode: Crawl and reference live online discourse and community reactions anchored around the keyword string '{keywords_clean}'."
+        if "exact same keyword string" in crawl_option:
+            inspiration_directive = f"Inspiration Mode: Crawl and reference live online discourse and community reactions anchored around the exact same keyword string '{keywords_clean}' combined with hashtag '{hashtags_clean}'."
         else:
             inspiration_directive = f"Inspiration Mode: Generate independently without crawling live posts of the keyword string '{keywords_clean}', focusing purely on creative prompt angles."
 
@@ -231,7 +231,7 @@ if st.button("🔥 Generate Posts", type="primary", disabled=btn_disabled):
         - DO NOT include the campaign keywords or hashtags inside the text body itself (they will be appended automatically via suffix).
 
         CRITICAL DIRECTIVE:
-        Output MUST be strictly a valid JSON array of EXACTLY {total_requested} strings. Do not include markdown code blocks or extra text.
+        Output MUST be strictly a valid JSON array of EXACTLY {total_requested} strings. Return ONLY the raw JSON array. Do not include markdown code blocks or extra text.
         """
 
         with st.spinner("Generating fresh posts with Gemini 3.6 Flash..."):
