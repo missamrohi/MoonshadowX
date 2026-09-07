@@ -7,10 +7,10 @@ import google.generativeai as genai
 import streamlit.components.v1 as components
 
 # Page configuration
-st.set_page_config(page_title="Moonshadow X Auto-Generator & Twister", page_icon="🌙", layout="centered")
+st.set_page_config(page_title="Moonshadow X Auto-Generator", page_icon="🌙", layout="centered")
 
 st.title("🌙 Moonshadow X Auto-Generator")
-st.write("Generate 10 original trending posts inspired by current X.com conversations using your campaign keywords and hashtag.")
+st.write("Generate trending posts inspired by current X.com conversations using your campaign keywords and hashtag.")
 
 # 1. SECURITY: Load API key silently from Streamlit Secrets
 api_key = st.secrets.get("GEMINI_API_KEY", "")
@@ -21,9 +21,12 @@ if not api_key:
 
 genai.configure(api_key=api_key.strip())
 
-# 2. RATE LIMITING: Track user actions in session state
+# 2. SESSION STATE MANAGEMENT
 if "last_generation_time" not in st.session_state:
     st.session_state.last_generation_time = 0
+
+if "previous_tweets" not in st.session_state:
+    st.session_state.previous_tweets = []
 
 # --- USER INPUTS ---
 col1, col2 = st.columns(2)
@@ -50,12 +53,24 @@ twist_angle = st.selectbox("Tone / Focus Angle", [
     "Emotional & Character Dynamic Analysis"
 ])
 
-# --- HELPER: COPY TO CLIPBOARD BUTTON COMPONENT ---
+# --- LANGUAGE CHECKBOXES ---
+st.markdown("### 🌐 Select Language(s)")
+col_lang1, col_lang2 = st.columns(2)
+
+with col_lang1:
+    lang_en = st.checkbox("🇬🇧 English", value=True)
+
+with col_lang2:
+    lang_hk = st.checkbox("🇭🇰 HK Cantonese", value=True)
+
+if not lang_en and not lang_hk:
+    st.warning("⚠️ Please select at least one language option.")
+
+# --- HELPER: ACTION BUTTONS COMPONENT ---
 def render_action_buttons(full_text, button_idx):
     encoded_tweet = urllib.parse.quote(full_text)
     tweet_url = f"https://x.com/intent/tweet?text={encoded_tweet}"
     
-    # Escape quotes and newlines for JavaScript
     js_safe_text = json.dumps(full_text)
     
     html_code = f"""
@@ -124,7 +139,9 @@ if keywords_clean or hashtags_clean:
 st.markdown("---")
 
 # --- GENERATION LOGIC ---
-if st.button("🔥 Generate 10 Unique Posts (5 EN + 5 HK CAN)", type="primary"):
+btn_disabled = not (lang_en or lang_hk)
+
+if st.button("🔥 Generate Posts", type="primary", disabled=btn_disabled):
     current_time = time.time()
     cooldown_seconds = 10
     
@@ -136,83 +153,139 @@ if st.button("🔥 Generate 10 Unique Posts (5 EN + 5 HK CAN)", type="primary"):
     else:
         st.session_state.last_generation_time = current_time
         
-        with st.spinner("Fast-generating 10 distinct posts using Gemini 3.6 Flash..."):
+        # Build prompt dynamic instructions based on selected languages
+        selected_langs = []
+        instructions = []
+        total_requested = 0
+
+        if lang_en and lang_hk:
+            total_requested = 20
+            instructions.append("""
+            - POSTS 1-10 (Native English Fandom Style):
+              Written in authentic Stan Twitter / X style (casual, lowercase emphasis, natural reactions).
+            - POSTS 11-20 (Hong Kong Cantonese Fandom Style):
+              Written in natural HK Cantonese (spoken HK Chinese / 廣東話) as used on Threads/X.
+              CRITICAL: DO NOT TRANSLATE or rephrase Posts 1-10. These must be completely original Cantonese ideas.
+            """)
+        elif lang_en:
+            total_requested = 10
+            instructions.append("""
+            - POSTS 1-10 (Native English Fandom Style):
+              Written in authentic Stan Twitter / X style (casual, lowercase emphasis, natural reactions).
+            """)
+        elif lang_hk:
+            total_requested = 10
+            instructions.append("""
+            - POSTS 1-10 (Hong Kong Cantonese Fandom Style):
+              Written in natural HK Cantonese (spoken HK Chinese / 廣東話) as used on Threads/X.
+            """)
+
+        # Avoid repetitions across generations
+        history_context = ""
+        if st.session_state.previous_tweets:
+            recent_tweets = st.session_state.previous_tweets[-30:] # Keep last 30
+            history_list = "\n".join([f"- {t}" for t in recent_tweets])
+            history_context = f"""
+            DO NOT REPEAT OR PARAPHRASE ANY OF THESE PREVIOUSLY GENERATED POSTS:
+            {history_list}
+            """
+
+        prompt = f"""
+        You are a top social media trend strategist and superfan for the TV series 'Moonshadow'.
+        Your task is to generate FRESH, DISTINCT, high-engagement posts for X (Twitter) centered around the campaign:
+        - Keywords: "{keywords_clean}"
+        - Hashtag: "{hashtags_clean}"
+        - Focus Angle: {twist_angle}
+        - Max text body length per post: {max_post_length} characters.
+
+        OUTPUT REQUIREMENTS:
+        Generate EXACTLY {total_requested} unique posts.
+        {"".join(instructions)}
+
+        STRICT DIVERSITY RULE:
+        {history_context}
+        - Every post body must explore a different angle, joke, theory, or reaction.
+        - DO NOT include the campaign keywords or hashtags inside the text body (they will be appended automatically).
+
+        CRITICAL DIRECTIVE:
+        Output MUST be strictly a valid JSON array of EXACTLY {total_requested} strings. Do not include markdown code blocks or extra text.
+        """
+
+        with st.spinner("Generating fresh posts..."):
+            response = None
+            models_to_try = ["gemini-3.6-flash", "gemini-2.5-flash"]
+            
+            for model_name in models_to_try:
+                try:
+                    model = genai.GenerativeModel(model_name)
+                    response = model.generate_content(prompt)
+                    break
+                except Exception as model_err:
+                    err_str = str(model_err)
+                    if "429" in err_str or "Quota exceeded" in err_str:
+                        st.caption(f"⚠️ `{model_name}` quota reached. Attempting fallback model...")
+                        time.sleep(1)
+                        continue
+                    else:
+                        st.error(f"Error: {err_str}")
+                        st.stop()
+
+            if not response:
+                st.error("Unable to generate posts due to API quota limits. Please try again shortly.")
+                st.stop()
+
             try:
-                # USING GEMINI-3.6-FLASH
-                model = genai.GenerativeModel("gemini-3.6-flash")
-
-                prompt = f"""
-                You are a top social media trend strategist and superfan for the TV series 'Moonshadow'.
-                Your task is to generate 10 FRESH, DISTINCT, high-engagement posts for X (Twitter) centered around the trending campaign:
-                - Keywords: "{keywords_clean}"
-                - Hashtag: "{hashtags_clean}"
-
-                OUTPUT REQUIREMENT:
-                Generate EXACTLY 10 unique posts split into two completely independent sets:
-
-                1. POSTS 1-5 (Native English Fandom Style):
-                   - Written in authentic Stan Twitter / X style (casual, lowercase emphasis, natural reactions, zero AI clichés).
-                   - Focus on unique jokes, theories, or reactions popular in international fandoms.
-
-                2. POSTS 6-10 (Hong Kong Cantonese Fandom Style):
-                   - CRITICAL: DO NOT TRANSLATE or rephrase Posts 1-5! These MUST be completely original Cantonese posts written from scratch with totally different angles, jokes, or theories.
-                   - Written in natural, colloquial Hong Kong Cantonese (spoken HK Chinese / 廣東話) as used by local HK fans on Threads/X (e.g., 睇到喊、癲咗、黐線、張力拉滿、CP感、鎖死、呢幕真係、好正).
-                   - Reflect how Hong Kong fans uniquely express hype and emotional reactions.
-
-                GENERAL RULES:
-                - Focus Angle: {twist_angle}.
-                - Maximum text length for EACH post body: MUST NOT exceed {max_post_length} characters.
-                - DO NOT include the campaign keywords or hashtags inside the post body (they will be appended automatically).
-
-                CRITICAL DIRECTIVE:
-                Output MUST be strictly a valid JSON array of EXACTLY 10 strings. Do not include markdown code blocks or extra text.
-                """
-
-                response = model.generate_content(prompt)
                 raw_content = response.text.strip()
-
-                # Clean JSON string
                 clean_json = re.sub(r'^```json\s*|\s*```$', '', raw_content, flags=re.MULTILINE)
                 captions = json.loads(clean_json)
 
+                # Store generated posts in session history to avoid future repetition
+                st.session_state.previous_tweets.extend(captions)
+
                 st.subheader("🎉 Ready-to-Post Captions")
 
-                # Organize into Tab Views
-                tab_en, tab_hk = st.tabs(["🇬🇧 Native English (5 Unique)", "🇭🇰 HK Cantonese (5 Unique)"])
+                # Setup Tabs dynamically based on selection
+                tabs_to_create = []
+                if lang_en:
+                    tabs_to_create.append("🇬🇧 Native English (10)")
+                if lang_hk:
+                    tabs_to_create.append("🇭🇰 HK Cantonese (10)")
 
-                # Render English Posts inside Tab 1 (Indices 0..4)
-                with tab_en:
-                    for idx in range(5):
-                        if idx < len(captions):
+                tabs = st.tabs(tabs_to_create)
+
+                tab_idx = 0
+                if lang_en:
+                    with tabs[tab_idx]:
+                        start_i = 0
+                        end_i = 10 if (lang_en and lang_hk) else len(captions)
+                        for idx in range(start_i, min(end_i, len(captions))):
                             caption_text = captions[idx]
                             suffix_parts = [p for p in [keywords_clean, hashtags_clean] if p]
                             suffix = "\n".join(suffix_parts)
                             full_tweet = f"{caption_text.strip()}\n\n{suffix}" if suffix else caption_text.strip()
 
-                            st.markdown(f"**English Option #{idx+1}** ({len(full_tweet)} / 280 chars)")
+                            st.markdown(f"**English Option #{idx - start_i + 1}** ({len(full_tweet)} / 280 chars)")
                             with st.container(border=True):
                                 st.text(full_tweet)
-                            
-                            # Interactive Tweet + Copy buttons
                             render_action_buttons(full_tweet, idx + 1)
                             st.write("")
+                    tab_idx += 1
 
-                # Render Cantonese Posts inside Tab 2 (Indices 5..9)
-                with tab_hk:
-                    for idx in range(5, 10):
-                        if idx < len(captions):
+                if lang_hk:
+                    with tabs[tab_idx]:
+                        start_i = 10 if (lang_en and lang_hk) else 0
+                        end_i = 20 if (lang_en and lang_hk) else len(captions)
+                        for idx in range(start_i, min(end_i, len(captions))):
                             caption_text = captions[idx]
                             suffix_parts = [p for p in [keywords_clean, hashtags_clean] if p]
                             suffix = "\n".join(suffix_parts)
                             full_tweet = f"{caption_text.strip()}\n\n{suffix}" if suffix else caption_text.strip()
 
-                            st.markdown(f"**HK Cantonese Option #{idx+1}** ({len(full_tweet)} / 280 chars)")
+                            st.markdown(f"**HK Cantonese Option #{idx - start_i + 1}** ({len(full_tweet)} / 280 chars)")
                             with st.container(border=True):
                                 st.text(full_tweet)
-                            
-                            # Interactive Tweet + Copy buttons
                             render_action_buttons(full_tweet, idx + 1)
                             st.write("")
 
             except Exception as e:
-                st.error(f"Error generating posts: {str(e)}")
+                st.error(f"Error parsing generated output: {str(e)}")
